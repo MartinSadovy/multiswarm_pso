@@ -1,5 +1,5 @@
 package multiswarm_pso
-/*
+
 import (
 	"github.com/gonum/plot"
 	"log"
@@ -15,8 +15,17 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/gonum/plot/palette"
 	"bytes"
+	"golang.org/x/image/colornames"
+	"fmt"
+	"io/ioutil"
+	"strconv"
 )
 
+/**
+ * THIS SCRIPT is BONUS for VISUALIZATION! ;)
+ */
+
+// this file creates gif from files (by glob(path))
 func makeGif(path string, output string) {
 	srcfilenames, err := filepath.Glob(path)
 	if err != nil {
@@ -87,27 +96,93 @@ type renderSwarm struct {
 	swarm *swarm
 	color color.Color
 }
-/*
-func RenderPoints2(filename string, width, height int, swarm *swarm, swarms []renderSwarm) {
+
+// Create pipeline which waiting a part-result and creates after that gif and on second return value is chan which indicate gif si done
+func CreateRenderPipe(filename string, parameters PSOParameters) ([](chan swarm), chan bool) {
+
+	swarmCount := parameters.SwarmCount
+	switchCount := parameters.SwitchCount
+
+	partResultChannel := make([](chan swarm), swarmCount)
+	for i := 0; i < swarmCount; i++ {
+		partResultChannel[i] = make(chan swarm, switchCount + 1)
+	}
+
+	renderDoneChannel := make(chan bool, 1)
+
+	tmpDir, err := ioutil.TempDir("", "pso-sim-gif" + strconv.Itoa(randInt(1, 1000)))
+	if err != nil {
+		log.Panic(err)
+	}
+
+	go func() {
+		colors := make([]color.RGBA, swarmCount)
+		renderPointsWaiter := make(chan bool, switchCount)
+		for i := 0; i < swarmCount; i++ {
+			colors[i] = colornames.Map[colornames.Names[i * 17 % len(colornames.Names)]]
+		}
+		for i := 0; i < switchCount; i++ {
+
+			swarmsxx := make([]renderSwarm, swarmCount)
+			for y := 0; y < swarmCount; y++ {
+				s :=
+					<-partResultChannel[y]
+				swarmsxx[y] = renderSwarm{&(s), colors[y]}
+			}
+
+			go func (i int) {
+				if (filename != "") {
+					renderPoints2(filepath.Clean(fmt.Sprintf("%s/%d.png", tmpDir, i)), 300, 300, &parameters.World, swarmsxx[0].swarm, swarmsxx)
+				}
+				renderPointsWaiter <- true
+			}(i)
+		}
+
+		for i := 0; i < switchCount; i++ {
+			<- renderPointsWaiter
+		}
+
+		if (filename != "") {
+			makeGif(filepath.Clean(fmt.Sprintf("%s/*.png", tmpDir)), filename)
+		}
+
+		renderDoneChannel <- true
+
+		os.RemoveAll(tmpDir)
+
+	}();
+
+
+	return partResultChannel, renderDoneChannel
+}
+
+// generate 2D graph to png file
+func renderPoints2(filename string, width, height int, world *World, swarm *swarm, swarms []renderSwarm) {
+
+	w := (*world).(QuadraticWorld)
+
+	if (w.DimensionSize() != 2) {
+		return;
+	}
 
 	p, err := plot.New()
 	if err != nil {
 		log.Panic(err)
 	}
-	p.Title.Text = "Heat map"
-	p.X.Min = swarm.leftTop.x
-	p.Y.Min = swarm.leftTop.y
-	p.X.Max = swarm.rightBottom.x
-	p.Y.Max = swarm.rightBottom.y
+	p.Title.Text = "Multiswarm on heat map"
+	p.X.Min = w.LeftTopEdgeCornerVector[0]
+	p.Y.Min = w.LeftTopEdgeCornerVector[1]
+	p.X.Max = w.RightDownEdgeCornerVector[0]
+	p.Y.Max = w.RightDownEdgeCornerVector[1]
 
-	boardWidth := int(math.Ceil(swarm.rightBottom.x - swarm.leftTop.x))
-	boardHeight := int(math.Ceil(swarm.rightBottom.y - swarm.leftTop.y))
+	boardWidth := int(math.Ceil(p.X.Max - p.X.Min))
+	boardHeight := int(math.Ceil(p.Y.Max - p.X.Min))
 
 	// heat map
 
 	v := make([]float64, boardWidth*boardHeight);
 	for i := 0; i < boardWidth*boardHeight; i++ {
-		v[i] = swarm.fcost(PositionXY{swarm.leftTop.x+float64(i % boardWidth), swarm.leftTop.y+float64(i / boardWidth)})
+		v[i] = swarm.fcost(Position{p.X.Min+float64(i % boardWidth), p.Y.Min+float64(i / boardWidth)})
 	}
 	m := offsetUnitGrid{Data: mat64.NewDense(boardWidth, boardHeight, v)}
 	h := plotter.NewHeatMap(m, palette.Heat(12, 1))
@@ -118,8 +193,8 @@ func RenderPoints2(filename string, width, height int, swarm *swarm, swarms []re
 	makePoints := func(points []particle) plotter.XYs {
 		pts := make(plotter.XYs, len(points))
 		for i := range points {
-			pts[i].X = float64(points[i].position.x)
-			pts[i].Y = float64(points[i].position.y)
+			pts[i].X = float64(points[i].position[0])
+			pts[i].Y = float64(points[i].position[1])
 		}
 		return pts
 	}
@@ -139,4 +214,3 @@ func RenderPoints2(filename string, width, height int, swarm *swarm, swarms []re
 		log.Panic(err)
 	}
 }
-*/
